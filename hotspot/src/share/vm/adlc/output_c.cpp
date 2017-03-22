@@ -1534,11 +1534,6 @@ void ArchDesc::defineExpand(FILE *fp, InstructForm *node) {
         continue;
       }
 
-      if (expand_instruction->has_temps()) {
-        globalAD->syntax_err(node->_linenum, "In %s: expand rules using instructs with TEMPs aren't supported: %s",
-                             node->_ident, new_id);
-      }
-
       // Build the node for the instruction
       fprintf(fp,"\n  %sNode *n%d = new (C) %sNode();\n", new_id, cnt, new_id);
       // Add control edge for this node

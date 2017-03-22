@@ -2898,7 +2898,7 @@ encode %{
 
   // Use release_store for card-marking to ensure that previous
   // oop-stores are visible before the card-mark change.
-  enc_class enc_cms_card_mark(memory mem, iRegLdst releaseFieldAddr) %{
+  enc_class enc_cms_card_mark(memory mem, iRegLdst releaseFieldAddr, flagsReg crx) %{
     // TODO: PPC port $archOpcode(ppc64Opcode_compound);
     // FIXME: Implement this as a cmove and use a fixed condition code
     // register which is written on every transition to compiled code,
@@ -2919,8 +2919,8 @@ encode %{
     // Check CMSCollectorCardTableModRefBSExt::_requires_release and do the
     // StoreStore barrier conditionally.
     __ lwz(R0, 0, $releaseFieldAddr$$Register);
-    __ cmpwi(CCR0, R0, 0);
-    __ beq_predict_taken(CCR0, skip_storestore);
+    __ cmpwi($crx$$CondRegister, R0, 0);
+    __ beq_predict_taken($crx$$CondRegister, skip_storestore);
 #endif
     __ li(R0, 0);
     __ membar(Assembler::StoreStore);
@@ -6788,8 +6788,9 @@ instruct storeD(memory mem, regD src) %{
 // do a releasing store. For this, it gets the address of
 // CMSCollectorCardTableModRefBSExt::_requires_release as input.
 // (Using releaseFieldAddr in the match rule is a hack.)
-instruct storeCM_CMS(memory mem, iRegLdst releaseFieldAddr) %{
+instruct storeCM_CMS(memory mem, iRegLdst releaseFieldAddr, flagsReg crx) %{
   match(Set mem (StoreCM mem releaseFieldAddr));
+  effect(TEMP crx);
   predicate(false);
   ins_cost(MEMORY_REF_COST);
 
@@ -6797,7 +6798,7 @@ instruct storeCM_CMS(memory mem, iRegLdst releaseFieldAddr) %{
   ins_cannot_rematerialize(true);
 
   format %{ "STB     #0, $mem \t// CMS card-mark byte (must be 0!), checking requires_release in [$releaseFieldAddr]" %}
-  ins_encode( enc_cms_card_mark(mem, releaseFieldAddr) );
+  ins_encode( enc_cms_card_mark(mem, releaseFieldAddr, crx) );
   ins_pipe(pipe_class_memory);
 %}
 
@@ -6814,8 +6815,9 @@ instruct storeCM_CMS_ExEx(memory mem, immI_0 zero) %{
   expand %{
     immL baseImm %{ 0 /* TODO: PPC port (jlong)CMSCollectorCardTableModRefBSExt::requires_release_address() */ %}
     iRegLdst releaseFieldAddress;
+    flagsReg crx;
     loadConL_Ex(releaseFieldAddress, baseImm);
-    storeCM_CMS(mem, releaseFieldAddress);
+    storeCM_CMS(mem, releaseFieldAddress, crx);
   %}
 %}
 
@@ -10819,7 +10821,7 @@ instruct cmpP_reg_imm16(flagsReg crx, iRegPsrc src1, immL16 src2) %{
 
 instruct cmpFUnordered_reg_reg(flagsReg crx, regF src1, regF src2) %{
   // Needs matchrule, see cmpDUnordered.
-  match(Set crx (CmpF src1 src2)); 
+  match(Set crx (CmpF src1 src2));
   // no match-rule, false predicate
   predicate(false);
 
@@ -10928,13 +10930,13 @@ instruct cmpF3_reg_reg_ExEx(iRegIdst dst, regF src1, regF src2) %{
 %}
 
 instruct cmpDUnordered_reg_reg(flagsReg crx, regD src1, regD src2) %{
-  // Needs matchrule so that ideal opcode is Cmp. This causes that gcm places the 
-  // node right before the conditional move using it. 
+  // Needs matchrule so that ideal opcode is Cmp. This causes that gcm places the
+  // node right before the conditional move using it.
   // In jck test api/java_awt/geom/QuadCurve2DFloat/index.html#SetCurveTesttestCase7,
   // compilation of java.awt.geom.RectangularShape::getBounds()Ljava/awt/Rectangle
   // crashed in register allocation where the flags Reg between cmpDUnoredered and a
   // conditional move was supposed to be spilled.
-  match(Set crx (CmpD src1 src2)); 
+  match(Set crx (CmpD src1 src2));
   // False predicate, shall not be matched.
   predicate(false);
 
