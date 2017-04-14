@@ -1034,18 +1034,22 @@ class StubGenerator: public StubCodeGenerator {
     __ beq(CCR0, short_copy);
 
     // byte_copy:
+    __ addi(R12, R12, (ulong)byte_copy_entry - (ulong)start);
     __ b(byte_copy_entry);
 
     __ bind(short_copy);
     __ srwi(R5_count, R5_count, LogBytesPerShort);
+    __ addi(R12, R12, (ulong)short_copy_entry - (ulong)start);
     __ b(short_copy_entry);
 
     __ bind(int_copy);
     __ srwi(R5_count, R5_count, LogBytesPerInt);
+    __ addi(R12, R12, (ulong)int_copy_entry - (ulong)start);
     __ b(int_copy_entry);
 
     __ bind(long_copy);
     __ srwi(R5_count, R5_count, LogBytesPerLong);
+    __ addi(R12, R12, (ulong)long_copy_entry - (ulong)start);
     __ b(long_copy_entry);
 
     return start;
@@ -1228,23 +1232,32 @@ class StubGenerator: public StubCodeGenerator {
     __ mr(count, length);        // length
 
     BLOCK_COMMENT("choose copy loop based on element size");
-    // Using conditional branches with range 32kB.
-    const int bo = Assembler::bcondCRbiIs1, bi = Assembler::bi0(CCR0, Assembler::equal);
-    __ cmpwi(CCR0, elsize, 0);
-    __ bc(bo, bi, entry_jbyte_arraycopy);
-    __ cmpwi(CCR0, elsize, LogBytesPerShort);
-    __ bc(bo, bi, entry_jshort_arraycopy);
-    __ cmpwi(CCR0, elsize, LogBytesPerInt);
-    __ bc(bo, bi, entry_jint_arraycopy);
 #ifdef ASSERT
     { Label L;
       __ cmpwi(CCR0, elsize, LogBytesPerLong);
-      __ beq(CCR0, L);
+      __ ble(CCR0, L);
       __ stop("must be long copy, but elsize is wrong");
       __ bind(L);
     }
 #endif
-    __ b(entry_jlong_arraycopy);
+
+    {
+      const Register table_addr = R6;
+      address table_ref, table_start;
+      table_ref = __ pc();
+      __ addi(table_addr, R12, 0);
+      __ sldi(elsize, elsize, 3); // table entry size is 8-bytes
+      __ ldx(R12, table_addr, elsize);
+      __ mtctr(R12);
+      __ bctr();
+
+      table_start = __ pc();
+      __ emit_address(entry_jbyte_arraycopy);
+      __ emit_address(entry_jshort_arraycopy);
+      __ emit_address(entry_jint_arraycopy);
+      __ emit_address(entry_jlong_arraycopy);
+      __ set_imm((int *)table_ref, (short)((ulong)table_start - (ulong)start));
+    }
 
     // ObjArrayKlass
   __ bind(L_objArray);
@@ -1519,7 +1532,7 @@ class StubGenerator: public StubCodeGenerator {
   //   R4_ARG2    -  to
   //   R5_ARG3    -  element count
   //
-  void array_overlap_test(address no_overlap_target, int log2_elem_size) {
+  void array_overlap_test(address no_overlap_target, int log2_elem_size, address start = 0) {
     Register tmp1 = R6_ARG4;
     Register tmp2 = R7_ARG5;
 
@@ -1535,6 +1548,10 @@ class StubGenerator: public StubCodeGenerator {
     __ crnand(CCR0, Assembler::less, CCR1, Assembler::less);
     // Overlaps if Src before dst and distance smaller than size.
     // Branch to forward copy routine otherwise (within range of 32kB).
+    if (start) {
+      // Adjust R12 for call targets which require that it point to function start.
+      __ addi(R12, R12, (ulong)no_overlap_target - (ulong)start);
+    }
     __ bc(Assembler::bcondCRbiIs1, Assembler::bi0(CCR0, Assembler::less), no_overlap_target);
 
     // need to copy backwards
@@ -1687,6 +1704,224 @@ class StubGenerator: public StubCodeGenerator {
     return start;
   }
 
+#define ALIGNMENT_PAD(mask) while (((ulong)__ pc()) & (mask)) __ nop()
+
+  address generate_disjoint_copy_alt(int log2_elem_size, const char * name) {
+    StubCodeMark mark(this, "StubRoutines", name);
+    const int _num_cases[] = { 71, 39, 19, 9 };
+    const int num_cases = _num_cases[log2_elem_size];
+    address start, table_ref, table_start;
+
+    Label l_64_Plus_Remainder, l_huge;
+
+    Register src = R3_ARG1;
+    Register dst = R4_ARG2;
+    Register cnt = R5_ARG3;
+    Register cnt_scaled = R6;
+    Register table_base = R7;
+    Register case_addr = R8;
+    Register const_16 = R9;
+    Register const_32 = R10;
+    Register const_48 = R11;
+
+    // Alignment of the function to a cache line is critical, everything is laid
+    // out from this alignment to produce best time. Optimal to have bctr (blectr)
+    // in first 8 instructions, so the switch computation is minimized to achieve
+    // this. The beginning of the switch table is also cache aligned, and is also
+    // critical for best time.
+    ALIGNMENT_PAD(0x7f);
+    start = __ pc();
+    __ sldi(cnt_scaled, cnt, 6);  // Scale count by *64 (16 instructions per case)
+    table_ref = __ pc();          // Record addi location for later patching.
+    __ addi(table_base, R12, 0);  // Offset from start of function to 1st case (patched later)
+    __ li(const_16, 16);          // Pre-load offset for cases. Best up here for loop's sake
+    __ cmpdi(CCR4, cnt, num_cases);             // Switch cases cover through <num_cases>
+    __ add(case_addr, table_base, cnt_scaled);  // Case address = scaled index + switch table base
+    __ mtctr(case_addr);
+    __ li(const_32, 2 * 16);  // Pre-load offset for cases.
+    __ blectr(CCR4);          // Size handled by table? Fall-through if larger
+
+    __ cmpdi(CCR3, cnt, num_cases + (64 >> log2_elem_size)); // Cases cover to <num_cases>, fall-through does 64
+    __ bgt(CCR3, l_huge);
+
+    __ bind(l_64_Plus_Remainder);
+    {
+      // Size is between <num_cases + 1> and <num_cases + 64> (switch case covers <num_cases>, Huge does over <num_cases + 64>)
+      // Do 64-byte copy and then process any remainder. Compute the remainder.
+      __ addi(case_addr, case_addr, -64 << (6 - log2_elem_size)); // adjust case_addr by 64
+      __ li(const_48, 3 * 16);
+      __ lxvd2x(VR0, 0, src);
+      __ lxvd2x(VR1, const_16, src);
+      __ lxvd2x(VR2, const_32, src);
+      __ lxvd2x(VR3, const_48, src);
+      __ addi(src, src, 64);
+      __ stxvd2x(VR0, 0, dst);
+      __ stxvd2x(VR1, const_16, dst);
+      __ stxvd2x(VR2, const_32, dst);
+      __ stxvd2x(VR3, const_48, dst);
+      __ mtctr(case_addr);
+      __ addi(dst, dst, 64);
+
+      __ cmpdi(CCR2, cnt, 128 >> log2_elem_size);
+      __ bnectr(CCR2);  // Fall through for special handling of 128.
+
+      __ lxvd2x(VR0, 0, src);
+      __ lxvd2x(VR1, const_16, src);
+      __ lxvd2x(VR2, const_32, src);
+      __ lxvd2x(VR3, const_48, src);
+      __ stxvd2x(VR0, 0, dst);
+      __ stxvd2x(VR1, const_16, dst);
+      __ stxvd2x(VR2, const_32, dst);
+      __ stxvd2x(VR3, const_48, dst);
+      __ li(R3_RET, 0);
+      __ blr();
+    }
+
+    // Align to 16-byte boundary.
+    ALIGNMENT_PAD(0xf);
+    __ bind(l_huge);
+    {
+      // Additional offset registers needed for vector memory access.
+      Register const_64  = cnt;        // recalculated after loop
+      Register const_80  = case_addr;  // recalculated after loop
+      Register const_96  = table_base; // preserved in R0
+      Register const_112 = R12;
+
+      // Crazy instruction order here works best across a range of sizes
+      __ srdi(R0, cnt, 7 - log2_elem_size);  // Loop iterations for 128-byte copy loop
+      __ li(const_48, 3 * 16);  // Offset for loop's use
+      __ mtctr(R0);             // Preset the loop counter. (Best time right here)
+      __ mr(R0, table_base);    // Preserve table_base in R0, reg needed for an offset
+
+      __ li(const_112, 7*16);
+      __ li(const_96, 6*16);
+      __ li(const_80, 5*16);
+      __ li(const_64, 4*16);
+
+      Label l_loop_128;
+      __ bind(l_loop_128);
+      __ lxvd2x(VR0, 0, src);
+      __ lxvd2x(VR1, const_16, src);
+      __ lxvd2x(VR2, const_32, src);
+      __ lxvd2x(VR3, const_48, src);
+      __ stxvd2x(VR0, 0, dst);
+      __ stxvd2x(VR1, const_16, dst);
+      __ stxvd2x(VR2, const_32, dst);
+      __ stxvd2x(VR3, const_48, dst);
+
+      __ lxvd2x(VR0, const_64, src);
+      __ lxvd2x(VR1, const_80, src);
+      __ lxvd2x(VR2, const_96, src);
+      __ lxvd2x(VR3, const_112, src);
+      __ addi(src, src, 128);
+      __ stxvd2x(VR0, const_64, dst);
+      __ stxvd2x(VR1, const_80, dst);
+      __ stxvd2x(VR2, const_96, dst);
+      __ stxvd2x(VR3, const_112, dst);
+      __ addi(dst, dst, 128);
+      __ bdnz(l_loop_128);
+
+      Label l_return;
+      __ andi_(cnt_scaled, cnt_scaled, 127 << (6 - log2_elem_size)); // Adjust cnt_scaled to reflect remainder
+      __ add(case_addr, R0, cnt_scaled); // Recalculate case_addr (table_base preserved in R0).
+      __ beq(CCR0, l_return);            // If no remainder, copy was multiple of 128, return
+      __ cmpdi(CCR3, cnt_scaled, num_cases << 6); // Remainder covered by switch table?
+      __ mtctr(case_addr);
+      __ srdi(cnt, cnt_scaled, 6); // cleanup for Do_64_Plus_Remainder scenario
+      __ blectr(CCR3);             // Remainder has switch case, jump directly to it
+
+      // Remainder larger than switch table, but less than 128. Process another 64 via Do_64_Plus_Remainder
+      __ b(l_64_Plus_Remainder);
+
+      __ bind(l_return);
+      __ li(R3_RET, 0);
+      __ blr();
+    }
+
+    // Align table to cache line boundary.
+    ALIGNMENT_PAD(0x7f);
+    table_start = __ pc();
+
+    // Generate switch table, Each case is exactly 16 instructions.
+    {
+      Register GPR[]       = { R0, R5, R6, R7 };
+      Register offsets[] = { 0, const_16, const_32, const_48 };
+      VectorRegister VR[]  = { VR0, VR1, VR2, VR3 };
+
+      assert((num_cases << log2_elem_size) < 80, "case generation code does not support sizes >= 80");
+      for (int c = 0; c <= num_cases; c++) {
+	address case_start = __ pc();
+	int size = c << log2_elem_size;
+	int offset;
+	int idx;
+	// const_16, const_32 are already set up.  Init const_48 if needed.
+	if (size >= 64)
+	  __ li(const_48, 48);
+	// Generate loads from src.
+	offset = 0;
+	idx = 0;
+	while (size - offset >= 16) {
+	  __ lxvd2x(VR[idx], offsets[idx], src);
+	  idx++; offset += 16;
+	}
+	idx = 0;
+	if ((size - offset) & 8) {
+	  __ ld(GPR[idx], offset, src);
+	  idx++; offset += 8;
+	}
+	if ((size - offset) & 4) {
+	  __ lwz(GPR[idx], offset, src);
+	  idx++; offset += 4;
+	}
+	if ((size - offset) & 2) {
+	  __ lhz(GPR[idx], offset, src);
+	  idx++; offset += 2;
+	}
+	if (size > offset) {
+	  __ lbz(GPR[idx], offset, src);
+	  idx++; offset += 1;
+	}
+	// Generate stores to dst.
+	offset = 0;
+	idx = 0;
+	while (size - offset >= 16) {
+	  __ stxvd2x(VR[idx], offsets[idx], dst);
+	  idx++; offset += 16;
+	}
+	idx = 0;
+	if ((size - offset) & 8) {
+	  __ std(GPR[idx], offset, dst);
+	  idx++; offset += 8;
+	}
+	if ((size - offset) & 4) {
+	  __ stw(GPR[idx], offset, dst);
+	  idx++; offset += 4;
+	}
+	if ((size - offset) & 2) {
+	  __ sth(GPR[idx], offset, dst);
+	  idx++; offset += 2;
+	}
+	if (size > offset) {
+	  __ stb(GPR[idx], offset, dst);
+	  idx++; offset += 1;
+	}
+	__ li(R3_RET, 0);
+	__ blr();
+	// Sanity check case length.  Final case can overflow.
+	assert(((((ulong)__ pc()) - (ulong)case_start) <= 64) ||
+	       (c == num_cases), "case length overflow");
+	if (c < num_cases) {
+	  ALIGNMENT_PAD(0x3f);
+	}
+      }
+    }
+
+    // Patch table_base calculation (addi instruction at table_ref).
+    __ set_imm((int *)table_ref, (short)((ulong)table_start - (ulong)start));
+
+    return start;
+  }
+
   // Generate stub for conjoint byte copy.  If "aligned" is true, the
   // "from" and "to" addresses are assumed to be heapword aligned.
   //
@@ -1708,7 +1943,7 @@ class StubGenerator: public StubCodeGenerator {
       STUB_ENTRY(jbyte_disjoint_arraycopy);
 
 
-    array_overlap_test(nooverlap_target, 0);
+    array_overlap_test(nooverlap_target, 0, start);
     // Do reverse copy. We assume the case of actual overlap is rare enough
     // that we don't have to optimize it.
     Label l_1, l_2;
@@ -1930,7 +2165,7 @@ class StubGenerator: public StubCodeGenerator {
       STUB_ENTRY(arrayof_jshort_disjoint_arraycopy) :
       STUB_ENTRY(jshort_disjoint_arraycopy);
 
-    array_overlap_test(nooverlap_target, 1);
+    array_overlap_test(nooverlap_target, 1, start);
 
     Label l_1, l_2;
     __ sldi(tmp1, R5_ARG3, 1);
@@ -2135,7 +2370,7 @@ class StubGenerator: public StubCodeGenerator {
       STUB_ENTRY(arrayof_jint_disjoint_arraycopy) :
       STUB_ENTRY(jint_disjoint_arraycopy);
 
-    array_overlap_test(nooverlap_target, 2);
+    array_overlap_test(nooverlap_target, 2, start);
 
     generate_conjoint_int_copy_core(aligned);
 
@@ -2305,7 +2540,7 @@ class StubGenerator: public StubCodeGenerator {
       STUB_ENTRY(arrayof_jlong_disjoint_arraycopy) :
       STUB_ENTRY(jlong_disjoint_arraycopy);
 
-    array_overlap_test(nooverlap_target, 3);
+    array_overlap_test(nooverlap_target, 3, start);
     generate_conjoint_long_copy_core(aligned);
 
     __ li(R3_RET, 0); // return 0
@@ -2818,18 +3053,18 @@ class StubGenerator: public StubCodeGenerator {
     // the conjoint stubs use them.
 
     // non-aligned disjoint versions
-    StubRoutines::_jbyte_disjoint_arraycopy       = generate_disjoint_byte_copy(false, "jbyte_disjoint_arraycopy");
-    StubRoutines::_jshort_disjoint_arraycopy      = generate_disjoint_short_copy(false, "jshort_disjoint_arraycopy");
-    StubRoutines::_jint_disjoint_arraycopy        = generate_disjoint_int_copy(false, "jint_disjoint_arraycopy");
-    StubRoutines::_jlong_disjoint_arraycopy       = generate_disjoint_long_copy(false, "jlong_disjoint_arraycopy");
+    StubRoutines::_jbyte_disjoint_arraycopy       = generate_disjoint_copy_alt(0, "jbyte_disjoint_arraycopy");
+    StubRoutines::_jshort_disjoint_arraycopy      = generate_disjoint_copy_alt(1, "jshort_disjoint_arraycopy");
+    StubRoutines::_jint_disjoint_arraycopy        = generate_disjoint_copy_alt(2, "jint_disjoint_arraycopy");
+    StubRoutines::_jlong_disjoint_arraycopy       = generate_disjoint_copy_alt(3, "jlong_disjoint_arraycopy");
     StubRoutines::_oop_disjoint_arraycopy         = generate_disjoint_oop_copy(false, "oop_disjoint_arraycopy", false);
     StubRoutines::_oop_disjoint_arraycopy_uninit  = generate_disjoint_oop_copy(false, "oop_disjoint_arraycopy_uninit", true);
 
     // aligned disjoint versions
-    StubRoutines::_arrayof_jbyte_disjoint_arraycopy      = generate_disjoint_byte_copy(true, "arrayof_jbyte_disjoint_arraycopy");
-    StubRoutines::_arrayof_jshort_disjoint_arraycopy     = generate_disjoint_short_copy(true, "arrayof_jshort_disjoint_arraycopy");
-    StubRoutines::_arrayof_jint_disjoint_arraycopy       = generate_disjoint_int_copy(true, "arrayof_jint_disjoint_arraycopy");
-    StubRoutines::_arrayof_jlong_disjoint_arraycopy      = generate_disjoint_long_copy(true, "arrayof_jlong_disjoint_arraycopy");
+    StubRoutines::_arrayof_jbyte_disjoint_arraycopy      = STUB_ENTRY(jbyte_disjoint_arraycopy);
+    StubRoutines::_arrayof_jshort_disjoint_arraycopy     = STUB_ENTRY(jshort_disjoint_arraycopy);
+    StubRoutines::_arrayof_jint_disjoint_arraycopy       = STUB_ENTRY(jint_disjoint_arraycopy);
+    StubRoutines::_arrayof_jlong_disjoint_arraycopy      = STUB_ENTRY(jlong_disjoint_arraycopy);
     StubRoutines::_arrayof_oop_disjoint_arraycopy        = generate_disjoint_oop_copy(true, "arrayof_oop_disjoint_arraycopy", false);
     StubRoutines::_arrayof_oop_disjoint_arraycopy_uninit = generate_disjoint_oop_copy(true, "oop_disjoint_arraycopy_uninit", true);
 

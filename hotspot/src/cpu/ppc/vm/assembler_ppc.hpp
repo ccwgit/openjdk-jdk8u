@@ -508,6 +508,8 @@ class Assembler : public AbstractAssembler {
     LVSR_OPCODE    = (31u << OPCODE_SHIFT |   38u << 1),
 
     // Vector-Scalar (VSX) instruction support.
+    LXVD2X_OPCODE  = (31u << OPCODE_SHIFT |  844u << 1),
+    STXVD2X_OPCODE = (31u << OPCODE_SHIFT |  972u << 1),
     MTVSRD_OPCODE  = (31u << OPCODE_SHIFT |  179u << 1),
     MFVSRD_OPCODE  = (31u << OPCODE_SHIFT |   51u << 1),
     MTVSRWA_OPCODE = (31u << OPCODE_SHIFT |  211u << 1),
@@ -1674,6 +1676,7 @@ class Assembler : public AbstractAssembler {
   // extended mnemonics for Branch Instructions via LR
   // We use `blr' for returns.
   inline void blr(relocInfo::relocType rt = relocInfo::none);
+  inline void beqlr(ConditionRegister crx, relocInfo::relocType rt = relocInfo::none);
 
   // extended mnemonics for Branch Instructions with CTR
   // bdnz means `decrement CTR and jump to L if CTR is not zero'
@@ -1685,6 +1688,8 @@ class Assembler : public AbstractAssembler {
   inline void bctr( relocInfo::relocType rt = relocInfo::none);
   inline void bctrl(relocInfo::relocType rt = relocInfo::none);
   // conditional jumps/branches via CTR
+  inline void bltctr( ConditionRegister crx, relocInfo::relocType rt = relocInfo::none);
+  inline void blectr( ConditionRegister crx, relocInfo::relocType rt = relocInfo::none);
   inline void beqctr( ConditionRegister crx, relocInfo::relocType rt = relocInfo::none);
   inline void beqctrl(ConditionRegister crx, relocInfo::relocType rt = relocInfo::none);
   inline void bnectr( ConditionRegister crx, relocInfo::relocType rt = relocInfo::none);
@@ -2074,6 +2079,8 @@ class Assembler : public AbstractAssembler {
   inline void mfvscr(   VectorRegister d);
 
   // Vector-Scalar (VSX) instructions.
+  inline void lxvd2x(   VectorRegister d, Register a, Register b);
+  inline void stxvd2x(  VectorRegister d, Register a, Register b);
   inline void mtvrd(    VectorRegister  d, Register a);
   inline void mfvrd(    Register        a, VectorRegister d);
 

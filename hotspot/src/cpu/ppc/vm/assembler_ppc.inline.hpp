@@ -470,6 +470,7 @@ inline void Assembler::bnsl(ConditionRegister crx, Label& L) { Assembler::bcl(bc
 // Extended mnemonics for Branch Instructions via LR.
 // We use `blr' for returns.
 inline void Assembler::blr(relocInfo::relocType rt) { Assembler::bclr(bcondAlways, 0, bhintbhBCLRisReturn, rt); }
+inline void Assembler::beqlr(ConditionRegister crx, relocInfo::relocType rt) { Assembler::bclr(bcondCRbiIs1, bi0(crx, equal), bhintbhBCLRisReturn, rt); }
 
 // Extended mnemonics for Branch Instructions with CTR.
 // Bdnz means `decrement CTR and jump to L if CTR is not zero'.
@@ -481,6 +482,8 @@ inline void Assembler::bdz(Label& L)  { Assembler::bc(18, 0, L); }
 inline void Assembler::bctr( relocInfo::relocType rt) { Assembler::bcctr(bcondAlways, 0, bhintbhBCCTRisNotReturnButSame, rt); }
 inline void Assembler::bctrl(relocInfo::relocType rt) { Assembler::bcctrl(bcondAlways, 0, bhintbhBCCTRisNotReturnButSame, rt); }
 // Conditional jumps/branches via CTR.
+inline void Assembler::bltctr( ConditionRegister crx, relocInfo::relocType rt) { Assembler::bcctr( bcondCRbiIs1, bi0(crx, less), bhintbhBCCTRisNotReturnButSame, rt); }
+inline void Assembler::blectr( ConditionRegister crx, relocInfo::relocType rt) { Assembler::bcctr( bcondCRbiIs0, bi0(crx, greater), bhintbhBCCTRisNotReturnButSame, rt); }
 inline void Assembler::beqctr( ConditionRegister crx, relocInfo::relocType rt) { Assembler::bcctr( bcondCRbiIs1, bi0(crx, equal), bhintbhBCCTRisNotReturnButSame, rt); }
 inline void Assembler::beqctrl(ConditionRegister crx, relocInfo::relocType rt) { Assembler::bcctrl(bcondCRbiIs1, bi0(crx, equal), bhintbhBCCTRisNotReturnButSame, rt); }
 inline void Assembler::bnectr( ConditionRegister crx, relocInfo::relocType rt) { Assembler::bcctr( bcondCRbiIs0, bi0(crx, equal), bhintbhBCCTRisNotReturnButSame, rt); }
@@ -718,6 +721,8 @@ inline void Assembler::stvx(  VectorRegister d, Register s1, Register s2) { emit
 inline void Assembler::stvxl( VectorRegister d, Register s1, Register s2) { emit_int32( STVXL_OPCODE  | vrt(d) | ra0mem(s1) | rb(s2)); }
 inline void Assembler::lvsl(  VectorRegister d, Register s1, Register s2) { emit_int32( LVSL_OPCODE   | vrt(d) | ra0mem(s1) | rb(s2)); }
 inline void Assembler::lvsr(  VectorRegister d, Register s1, Register s2) { emit_int32( LVSR_OPCODE   | vrt(d) | ra0mem(s1) | rb(s2)); }
+inline void Assembler::lxvd2x (VectorRegister d, Register s1, Register s2) { emit_int32( LXVD2X_OPCODE  | vrt(d) | ra(s1) | rb(s2)); }
+inline void Assembler::stxvd2x(VectorRegister d, Register s1, Register s2) { emit_int32( STXVD2X_OPCODE | vrt(d) | ra(s1) | rb(s2)); }
 
 // Vector-Scalar (VSX) instructions.
 inline void Assembler::mtvrd(  VectorRegister  d, Register a)       { emit_int32( MTVSRD_OPCODE  | vrt(d)  | ra(a)  | 1u); } // 1u: d is treated as Vector (VMX/Altivec).
