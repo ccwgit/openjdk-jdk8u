@@ -89,6 +89,7 @@ public:
   static bool has_dcba()    { return (_features & dcba_m) != 0; }
   static bool has_vcipher() { return (_features & vcipher_m) != 0; }
   static bool has_vpmsumb() { return (_features & vpmsumb_m) != 0; }
+  static bool has_mtfprd()  { return has_vpmsumb(); } // alias for P8
 
   static const char* cpu_features() { return _features_str; }
 
