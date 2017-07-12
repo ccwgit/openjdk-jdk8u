@@ -98,6 +98,7 @@ public:
   static bool has_vpmsumb() { return (_features & vpmsumb_m) != 0; }
   static bool has_tcheck()  { return (_features & tcheck_m) != 0; }
   static bool has_mfdscr()  { return (_features & mfdscr_m) != 0; }
+  static bool has_mtfprd()  { return has_vpmsumb(); } // alias for P8
 
   static const char* cpu_features() { return _features_str; }
   static int get_cache_line_size()  { return _measured_cache_line_size; }

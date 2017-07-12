@@ -723,6 +723,11 @@ inline void Assembler::lvsr(  VectorRegister d, Register s1, Register s2) { emit
 inline void Assembler::mtvrd(  VectorRegister  d, Register a)       { emit_int32( MTVSRD_OPCODE  | vrt(d)  | ra(a)  | 1u); } // 1u: d is treated as Vector (VMX/Altivec).
 inline void Assembler::mfvrd(  Register        a, VectorRegister d) { emit_int32( MFVSRD_OPCODE  | vrt(d)  | ra(a)  | 1u); } // 1u: d is treated as Vector (VMX/Altivec).
 
+// Vector-Scalar (VSX) instructions.
+inline void Assembler::mtfprd(  FloatRegister   d, Register a)      { emit_int32( MTVSRD_OPCODE  | frt(d)  | ra(a)); }
+inline void Assembler::mtfprwa( FloatRegister   d, Register a)      { emit_int32( MTVSRWA_OPCODE | frt(d)  | ra(a)); }
+inline void Assembler::mffprd(  Register        a, FloatRegister d) { emit_int32( MFVSRD_OPCODE  | frt(d)  | ra(a)); }
+
 inline void Assembler::vpkpx(   VectorRegister d, VectorRegister a, VectorRegister b) { emit_int32( VPKPX_OPCODE   | vrt(d) | vra(a) | vrb(b)); }
 inline void Assembler::vpkshss( VectorRegister d, VectorRegister a, VectorRegister b) { emit_int32( VPKSHSS_OPCODE | vrt(d) | vra(a) | vrb(b)); }
 inline void Assembler::vpkswss( VectorRegister d, VectorRegister a, VectorRegister b) { emit_int32( VPKSWSS_OPCODE | vrt(d) | vra(a) | vrb(b)); }

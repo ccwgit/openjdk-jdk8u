@@ -510,6 +510,7 @@ class Assembler : public AbstractAssembler {
     // Vector-Scalar (VSX) instruction support.
     MTVSRD_OPCODE  = (31u << OPCODE_SHIFT |  179u << 1),
     MFVSRD_OPCODE  = (31u << OPCODE_SHIFT |   51u << 1),
+    MTVSRWA_OPCODE = (31u << OPCODE_SHIFT |  211u << 1),
 
     // Vector Permute and Formatting
     VPKPX_OPCODE   = (4u  << OPCODE_SHIFT |  782u     ),
@@ -2075,6 +2076,11 @@ class Assembler : public AbstractAssembler {
   // Vector-Scalar (VSX) instructions.
   inline void mtvrd(    VectorRegister  d, Register a);
   inline void mfvrd(    Register        a, VectorRegister d);
+
+  // Vector-Scalar (VSX) instructions.
+  inline void mtfprd(   FloatRegister   d, Register a);
+  inline void mtfprwa(  FloatRegister   d, Register a);
+  inline void mffprd(   Register        a, FloatRegister d);
 
   // AES (introduced with Power 8)
   inline void vcipher(     VectorRegister d, VectorRegister a, VectorRegister b);
