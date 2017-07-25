@@ -2522,8 +2522,6 @@ void TemplateTable::getfield_or_static(int byte_no, bool is_static) {
   __ lbzx(R17_tos, Rclass_or_obj, Roffset);
   __ extsb(R17_tos, R17_tos);
   __ push(ztos);
-// MH-20170414
-//  if (!is_static && rc == may_rewrite) {
   if (!is_static) {
     // use btos rewriting, no truncating to t/f bit is needed for getfield.
     patch_bytecode(Bytecodes::_fast_bgetfield, Rbc, Rscratch);
@@ -2822,8 +2820,6 @@ void TemplateTable::putfield_or_static(int byte_no, bool is_static) {
   if (!is_static) { pop_and_check_object(Rclass_or_obj); } // Kills R11_scratch1.
   __ andi(R17_tos, R17_tos, 0x1);
   __ stbx(R17_tos, Rclass_or_obj, Roffset);
-// MH-20170414
-//  if (!is_static && rc == may_rewrite) {
   if (!is_static) {
     patch_bytecode(Bytecodes::_fast_zputfield, Rbc, Rscratch, true, byte_no);
   }

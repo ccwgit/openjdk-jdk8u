@@ -110,9 +110,6 @@ void CounterOverflowStub::emit_code(LIR_Assembler* ce) {
   __ std(R0, -16, R1_SP);
 
   // Parameter 2: Method*
-// MH-20170515
-//  __ mr(R0, _method->as_register());
-//  __ std(R0, -8, R1_SP);
   __ std(_method->as_register(), -8, R1_SP);
 
   address a = Runtime1::entry_for(Runtime1::counter_overflow_id);
@@ -265,13 +262,7 @@ void MonitorEnterStub::emit_code(LIR_Assembler* ce) {
   //__ load_const_optimized(R0, stub);
   __ add_const_optimized(R0, R29_TOC, MacroAssembler::offset_to_global_toc(stub));
   __ mtctr(R0);
-// MH-20170515
-//  __ mr(R0, _obj_reg->as_register());
-//  __ std(R0, -16, R1_SP);
   __ std(_obj_reg->as_register(), -16, R1_SP);
-// MH-20170515
-//  __ mr(R0, _lock_reg->as_register());
-//  __ std(R0, -8, R1_SP);
   __ std(_lock_reg->as_register(), -8, R1_SP);
   __ bctrl();
   ce->add_call_info_here(_info);

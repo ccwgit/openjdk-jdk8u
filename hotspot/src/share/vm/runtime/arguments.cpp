@@ -1502,15 +1502,6 @@ void Arguments::set_use_compressed_oops() {
       FLAG_SET_ERGO(bool, UseCompressedOops, true);
     }
 #endif
-#ifdef _WIN64
-    if (UseLargePages && UseCompressedOops) {
-      // Cannot allocate guard pages for implicit checks in indexed addressing
-      // mode, when large pages are specified on windows.
-      // This flag could be switched ON if narrow oop base address is set to 0,
-      // see code in Universe::initialize_heap().
-      Universe::set_narrow_oop_use_implicit_null_checks(false);
-    }
-#endif //  _WIN64
   } else {
     if (UseCompressedOops && !FLAG_IS_DEFAULT(UseCompressedOops)) {
       warning("Max heap size too large for Compressed Oops");
@@ -2457,6 +2448,7 @@ bool Arguments::check_vm_args_consistency() {
 #ifdef COMPILER1
   status = status && verify_min_value(ValueMapInitialSize, 1, "ValueMapInitialSize");
 #endif
+  status = status && verify_min_value(HeapSearchSteps, 1, "HeapSearchSteps");
 
   if (PrintNMTStatistics) {
 #if INCLUDE_NMT
@@ -4281,6 +4273,10 @@ void Arguments::PropertyList_add(SystemProperty** plist, const char* k, char* v)
 
   SystemProperty* new_p = new SystemProperty(k, v, true);
   PropertyList_add(plist, new_p);
+}
+
+void Arguments::PropertyList_add(SystemProperty *element) {
+  PropertyList_add(&_system_properties, element);
 }
 
 // This add maintains unique property key in the list.

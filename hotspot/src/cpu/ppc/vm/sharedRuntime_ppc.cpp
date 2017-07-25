@@ -2831,8 +2831,6 @@ void SharedRuntime::generate_deopt_blob() {
   __ set_last_Java_frame(R1_SP, noreg);
 
   // With EscapeAnalysis turned on, this call may safepoint!
-// MH-20170630
-//  __ call_VM_leaf(CAST_FROM_FN_PTR(address, Deoptimization::fetch_unroll_info), R16_thread, exec_mode_reg);
   __ call_VM_leaf(CAST_FROM_FN_PTR(address, Deoptimization::fetch_unroll_info), R16_thread);
   address calls_return_pc = __ last_calls_return_pc();
   // Set an oopmap for the call site that describes all our saved registers.
@@ -2846,9 +2844,6 @@ void SharedRuntime::generate_deopt_blob() {
   // by save_volatile_registers(...).
   RegisterSaver::restore_result_registers(masm, first_frame_size_in_bytes);
 
-// MH-20170630
-//  // reload the exec mode from the UnrollBlock (it might have changed)
-//  __ lwz(exec_mode_reg, Deoptimization::UnrollBlock::unpack_kind_offset_in_bytes(), unroll_block_reg);
   // In excp_deopt_mode, restore and clear exception oop which we
   // stored in the thread during exception entry above. The exception
   // oop will be the return value of this stub.

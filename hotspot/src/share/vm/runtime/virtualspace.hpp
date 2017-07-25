@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1997, 2013, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1997, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -31,25 +31,22 @@
 
 class ReservedSpace VALUE_OBJ_CLASS_SPEC {
   friend class VMStructs;
- private:
+ protected:
   char*  _base;
   size_t _size;
   size_t _noaccess_prefix;
   size_t _alignment;
   bool   _special;
+ private:
   bool   _executable;
 
   // ReservedSpace
   ReservedSpace(char* base, size_t size, size_t alignment, bool special,
                 bool executable);
+ protected:
   void initialize(size_t size, size_t alignment, bool large,
                   char* requested_address,
-                  const size_t noaccess_prefix,
                   bool executable);
-
- protected:
-  // Create protection page at the beginning of the space.
-  void protect_noaccess_prefix(const size_t size);
 
  public:
   // Constructor
@@ -60,8 +57,7 @@ class ReservedSpace VALUE_OBJ_CLASS_SPEC {
   // aligned up to the final alignment in this case.
   ReservedSpace(size_t size, size_t preferred_page_size = 0);
   ReservedSpace(size_t size, size_t alignment, bool large,
-                char* requested_address = NULL,
-                const size_t noaccess_prefix = 0);
+                char* requested_address = NULL);
   ReservedSpace(size_t size, size_t alignment, bool large, bool executable);
 
   // Accessors
@@ -102,12 +98,23 @@ ReservedSpace ReservedSpace::last_part(size_t partition_size)
   return last_part(partition_size, alignment());
 }
 
-// Class encapsulating behavior specific of memory space reserved for Java heap
+// Class encapsulating behavior specific of memory space reserved for Java heap.
 class ReservedHeapSpace : public ReservedSpace {
-public:
-  // Constructor
-  ReservedHeapSpace(size_t size, size_t forced_base_alignment,
-                    bool large, char* requested_address);
+ private:
+  void try_reserve_heap(size_t size, size_t alignment, bool large,
+                        char *requested_address);
+  void try_reserve_range(char *highest_start, char *lowest_start,
+                         size_t attach_point_alignment, char *aligned_HBMA,
+                         char *upper_bound, size_t size, size_t alignment, bool large);
+  void initialize_compressed_heap(const size_t size, size_t alignment, bool large);
+  // Create protection page at the beginning of the space.
+  void establish_noaccess_prefix();
+ public:
+  // Constructor. Tries to find a heap that is good for compressed oops.
+  ReservedHeapSpace(size_t size, size_t forced_base_alignment, bool large);
+  // Returns the base to be used for compression, i.e. so that null can be
+  // encoded safely and implicit null checks can work.
+  char *compressed_oop_base() { return _base - _noaccess_prefix; }
 };
 
 // Class encapsulating behavior specific memory space for Code
