@@ -2590,6 +2590,13 @@ encode %{
     __ lbz($dst$$Register, Idisp, $mem$$base$$Register);
   %}
 
+  enc_class enc_lbzx(iRegIdst dst, indIndex mem) %{
+    // TODO: PPC port $archOpcode(ppc64Opcode_lbzx);
+
+    MacroAssembler _masm(&cbuf);
+    __ lbzx($dst$$Register, $mem$$base$$Register, $mem$$index$$Register);
+  %}
+
   // Load acquire.
   enc_class enc_lbz_ac(iRegIdst dst, memory mem) %{
     // TODO: PPC port $archOpcode(ppc64Opcode_compound);
@@ -2606,6 +2613,13 @@ encode %{
     MacroAssembler _masm(&cbuf);
     int Idisp = $mem$$disp + frame_slots_bias($mem$$base, ra_);
     __ lhz($dst$$Register, Idisp, $mem$$base$$Register);
+  %}
+
+  enc_class enc_lhzx(iRegIdst dst, indIndex mem) %{
+    // TODO: PPC port $archOpcode(ppc64Opcode_lhzx);
+
+    MacroAssembler _masm(&cbuf);
+    __ lhzx($dst$$Register, $mem$$base$$Register, $mem$$index$$Register);
   %}
 
   // Load acquire.
@@ -2625,6 +2639,13 @@ encode %{
     MacroAssembler _masm(&cbuf);
     int Idisp = $mem$$disp + frame_slots_bias($mem$$base, ra_);
     __ lwz($dst$$Register, Idisp, $mem$$base$$Register);
+  %}
+
+  enc_class enc_lwzx(iRegIdst dst, indIndex mem) %{
+    // TODO: PPC port $archOpcode(ppc64Opcode_lwzx);
+
+    MacroAssembler _masm(&cbuf);
+    __ lwzx($dst$$Register, $mem$$base$$Register, $mem$$index$$Register);
   %}
 
   // Load acquire.
@@ -2647,6 +2668,13 @@ encode %{
     __ ld($dst$$Register, Idisp, $mem$$base$$Register);
   %}
 
+  enc_class enc_ldx(iRegLdst dst, indIndex mem) %{
+    // TODO: PPC port $archOpcode(ppc64Opcode_ldx);
+
+    MacroAssembler _masm(&cbuf);
+    __ ldx($dst$$Register, $mem$$base$$Register, $mem$$index$$Register);
+  %}
+
   // Load acquire.
   enc_class enc_ld_ac(iRegLdst dst, memoryAlg4 mem) %{
     // TODO: PPC port $archOpcode(ppc64Opcode_compound);
@@ -2664,6 +2692,12 @@ encode %{
     MacroAssembler _masm(&cbuf);
     int Idisp = $mem$$disp + frame_slots_bias($mem$$base, ra_);
     __ lfd($dst$$FloatRegister, Idisp, $mem$$base$$Register);
+  %}
+
+  enc_class enc_lfdx(RegF dst, indIndex mem) %{
+    // TODO: PPC port $archOpcode(ppc64Opcode_lfdx);
+    MacroAssembler _masm(&cbuf);
+    __ lfdx($dst$$FloatRegister, $mem$$base$$Register, $mem$$index$$Register);
   %}
 
   enc_class enc_load_long_constL(iRegLdst dst, immL src, iRegLdst toc) %{
@@ -2991,6 +3025,13 @@ encode %{
     __ stw($src$$Register, Idisp, $mem$$base$$Register);
   %}
 
+  enc_class enc_stwx(iRegIsrc src, indIndex mem) %{
+    // TODO: PPC port $archOpcode(ppc64Opcode_stwx);
+
+    MacroAssembler _masm(&cbuf);
+    __ stwx($src$$Register, $mem$$base$$Register, $mem$$index$$Register);
+  %}
+
   enc_class enc_std(iRegIsrc src, memoryAlg4 mem) %{
     // TODO: PPC port $archOpcode(ppc64Opcode_std);
     MacroAssembler _masm(&cbuf);
@@ -3000,6 +3041,13 @@ encode %{
     __ std($src$$Register, Idisp, $mem$$base$$Register);
   %}
 
+  enc_class enc_stdx(iRegLsrc src, indIndex mem) %{
+    // TODO: PPC port $archOpcode(ppc64Opcode_stdx);
+
+    MacroAssembler _masm(&cbuf);
+    __ stdx($src$$Register, $mem$$base$$Register, $mem$$index$$Register);
+  %}
+
   enc_class enc_stfs(RegF src, memory mem) %{
     // TODO: PPC port $archOpcode(ppc64Opcode_stfs);
     MacroAssembler _masm(&cbuf);
@@ -3007,11 +3055,23 @@ encode %{
     __ stfs($src$$FloatRegister, Idisp, $mem$$base$$Register);
   %}
 
+  enc_class enc_stfsx(RegF src, indIndex mem) %{
+    // TODO: PPC port $archOpcode(ppc64Opcode_stfsx);
+    MacroAssembler _masm(&cbuf);
+    __ stfsx($src$$FloatRegister, $mem$$base$$Register, $mem$$index$$Register);
+  %}
+
   enc_class enc_stfd(RegF src, memory mem) %{
     // TODO: PPC port $archOpcode(ppc64Opcode_stfd);
     MacroAssembler _masm(&cbuf);
     int Idisp = $mem$$disp + frame_slots_bias($mem$$base, ra_);
     __ stfd($src$$FloatRegister, Idisp, $mem$$base$$Register);
+  %}
+
+  enc_class enc_stfdx(RegF src, indIndex mem) %{
+    // TODO: PPC port $archOpcode(ppc64Opcode_stfdx);
+    MacroAssembler _masm(&cbuf);
+    __ stfdx($src$$FloatRegister, $mem$$base$$Register, $mem$$index$$Register);
   %}
 
   // Use release_store for card-marking to ensure that previous
@@ -5008,6 +5068,20 @@ operand indOffset16Alg4(iRegPsrc reg, immL16Alg4 offset) %{
   %}
 %}
 
+// Indirect with Register Index
+operand indIndex(iRegPsrc addr, iRegLsrc index) %{
+  constraint(ALLOC_IN_RC(bits64_reg_ro));
+  match(AddP addr index);
+  op_cost(100);
+  format %{ "[$addr + $index]" %}
+  interface(MEMORY_INTER) %{
+    base($addr);
+    index($index);
+    scale(0x0);
+    disp(0x0);
+  %}
+%}
+
 //----------Complex Operands for Compressed OOPs-------------------------------
 // Compressed OOPs with narrow_oop_shift == 0.
 
@@ -5405,6 +5479,18 @@ instruct loadB_indirect_Ex(iRegIdst dst, indirectMemory mem) %{
   %}
 %}
 
+// Load Byte (8bit signed) indexed. LoadB = LoadUB + ConvUB2B.
+instruct loadB_indexed(iRegIdst dst, indIndex mem) %{
+  match(Set dst (LoadB mem));
+  predicate(n->as_Load()->is_unordered() || followed_by_acquire(n));
+  ins_cost(MEMORY_REF_COST + DEFAULT_COST);
+  expand %{
+    iRegIdst tmp;
+    loadUB_indexed(tmp, mem);
+    convB2I_reg_2(dst, tmp);
+  %}
+%}
+
 instruct loadB_indirect_ac_Ex(iRegIdst dst, indirectMemory mem) %{
   match(Set dst (LoadB mem));
   ins_cost(3*MEMORY_REF_COST + DEFAULT_COST);
@@ -5475,6 +5561,18 @@ instruct loadUB(iRegIdst dst, memory mem) %{
   ins_pipe(pipe_class_memory);
 %}
 
+// Load Unsigned Byte (8bit unsigned) indexed
+instruct loadUB_indexed(iRegIdst dst, indIndex mem) %{
+  match(Set dst (LoadUB mem));
+  predicate(n->as_Load()->is_unordered() || followed_by_acquire(n));
+  ins_cost(MEMORY_REF_COST);
+
+  format %{ "LBZX    $dst, $mem" %}
+  size(4);
+  ins_encode( enc_lbzx(dst, mem) );
+  ins_pipe(pipe_class_memory);
+%}
+
 // Load  Unsigned Byte (8bit UNsigned) acquire.
 instruct loadUB_ac(iRegIdst dst, memory mem) %{
   match(Set dst (LoadUB mem));
@@ -5497,6 +5595,18 @@ instruct loadUB2L(iRegLdst dst, memory mem) %{
   format %{ "LBZ     $dst, $mem \t// byte, zero-extend to long" %}
   size(4);
   ins_encode( enc_lbz(dst, mem) );
+  ins_pipe(pipe_class_memory);
+%}
+
+// Load Unsigned Byte (8bit UNsigned) indexed into a Long Register.
+instruct loadUB2L_indexed(iRegLdst dst, indIndex mem) %{
+  match(Set dst (ConvI2L (LoadUB mem)));
+  predicate(_kids[0]->_leaf->as_Load()->is_unordered() || followed_by_acquire(_kids[0]->_leaf));
+  ins_cost(MEMORY_REF_COST);
+
+  format %{ "LBZX    $dst, $mem \t// byte, zero-extend to long" %}
+  size(4);
+  ins_encode( enc_lbzx(dst, mem) );
   ins_pipe(pipe_class_memory);
 %}
 
@@ -5524,6 +5634,21 @@ instruct loadS(iRegIdst dst, memory mem) %{
     // TODO: PPC port $archOpcode(ppc64Opcode_lha);
     int Idisp = $mem$$disp + frame_slots_bias($mem$$base, ra_);
     __ lha($dst$$Register, Idisp, $mem$$base$$Register);
+  %}
+  ins_pipe(pipe_class_memory);
+%}
+
+// Load Short (16bit signed) indexed
+instruct loadS_indexed(iRegIdst dst, indIndex mem) %{
+  match(Set dst (LoadS mem));
+  predicate(n->as_Load()->is_unordered() || followed_by_acquire(n));
+  ins_cost(MEMORY_REF_COST);
+
+  format %{ "LHAX    $dst, $mem" %}
+  size(4);
+  ins_encode %{
+    // TODO: PPC port $archOpcode(ppc64Opcode_lhax);
+    __ lhax($dst$$Register, $mem$$base$$Register, $mem$$index$$Register);
   %}
   ins_pipe(pipe_class_memory);
 %}
@@ -5559,6 +5684,18 @@ instruct loadUS(iRegIdst dst, memory mem) %{
   ins_pipe(pipe_class_memory);
 %}
 
+// Load Char (16bit unsigned) indexed
+instruct loadUS_indexed(iRegIdst dst, indIndex mem) %{
+  match(Set dst (LoadUS mem));
+  predicate(n->as_Load()->is_unordered() || followed_by_acquire(n));
+  ins_cost(MEMORY_REF_COST);
+
+  format %{ "LHZX    $dst, $mem" %}
+  size(4);
+  ins_encode( enc_lhzx(dst, mem) );
+  ins_pipe(pipe_class_memory);
+%}
+
 // Load Char (16bit unsigned) acquire.
 instruct loadUS_ac(iRegIdst dst, memory mem) %{
   match(Set dst (LoadUS mem));
@@ -5584,6 +5721,18 @@ instruct loadUS2L(iRegLdst dst, memory mem) %{
   ins_pipe(pipe_class_memory);
 %}
 
+// Load Unsigned Short/Char (16bit UNsigned) indexed into a Long Register.
+instruct loadUS2L_indexed(iRegLdst dst, indIndex mem) %{
+  match(Set dst (ConvI2L (LoadUS mem)));
+  predicate(_kids[0]->_leaf->as_Load()->is_unordered() || followed_by_acquire(_kids[0]->_leaf));
+  ins_cost(MEMORY_REF_COST);
+
+  format %{ "LHZX    $dst, $mem \t// short, zero-extend to long" %}
+  size(4);
+  ins_encode( enc_lhzx(dst, mem) );
+  ins_pipe(pipe_class_memory);
+%}
+
 // Load Unsigned Short/Char (16bit UNsigned) into a Long Register acquire.
 instruct loadUS2L_ac(iRegLdst dst, memory mem) %{
   match(Set dst (ConvI2L (LoadUS mem)));
@@ -5606,6 +5755,18 @@ instruct loadI(iRegIdst dst, memory mem) %{
   format %{ "LWZ     $dst, $mem" %}
   size(4);
   ins_encode( enc_lwz(dst, mem) );
+  ins_pipe(pipe_class_memory);
+%}
+
+// Load Integer indexed
+instruct loadI_indexed(iRegIdst dst, indIndex mem) %{
+  match(Set dst (LoadI mem));
+  predicate(n->as_Load()->is_unordered() || followed_by_acquire(n));
+  ins_cost(MEMORY_REF_COST);
+
+  format %{ "LWZX    $dst, $mem" %}
+  size(4);
+  ins_encode( enc_lwzx(dst, mem) );
   ins_pipe(pipe_class_memory);
 %}
 
@@ -5636,6 +5797,19 @@ instruct loadUI2L(iRegLdst dst, memory mem, immL_32bits mask) %{
   ins_pipe(pipe_class_memory);
 %}
 
+// LoadI (indexed) + ConvI2L + AndL 0xffffffff.
+instruct loadUI2L_indexed(iRegLdst dst, indIndex mem, immL_32bits mask) %{
+  match(Set dst (AndL (ConvI2L (LoadI mem)) mask));
+  predicate(_kids[0]->_kids[0]->_leaf->as_Load()->is_unordered());
+  ins_cost(MEMORY_REF_COST);
+
+  format %{ "LWZX    $dst, $mem \t// zero-extend to long" %}
+  size(4);
+  ins_encode( enc_lwzx(dst, mem) );
+  ins_pipe(pipe_class_memory);
+%}
+
+
 instruct loadI_reverse(iRegIdst dst, indirect mem) %{
   match(Set dst (LoadI mem));
   predicate(false);
@@ -5660,6 +5834,21 @@ instruct loadI2L(iRegLdst dst, memoryAlg4 mem) %{
     // TODO: PPC port $archOpcode(ppc64Opcode_lwa);
     int Idisp = $mem$$disp + frame_slots_bias($mem$$base, ra_);
     __ lwa($dst$$Register, Idisp, $mem$$base$$Register);
+  %}
+  ins_pipe(pipe_class_memory);
+%}
+
+// Match loading integer and casting it to long - indexed.
+instruct loadI2L_indexed(iRegLdst dst, indIndex mem) %{
+  match(Set dst (ConvI2L (LoadI mem)));
+  predicate(_kids[0]->_leaf->as_Load()->is_unordered());
+  ins_cost(MEMORY_REF_COST);
+
+  format %{ "LWAX    $dst, $mem \t// loadI2L" %}
+  size(4);
+  ins_encode %{
+    // TODO: PPC port $archOpcode(ppc64Opcode_lwax);
+    __ lwax($dst$$Register, $mem$$base$$Register, $mem$$index$$Register);
   %}
   ins_pipe(pipe_class_memory);
 %}
@@ -5692,6 +5881,18 @@ instruct loadL(iRegLdst dst, memoryAlg4 mem) %{
   format %{ "LD      $dst, $mem \t// long" %}
   size(4);
   ins_encode( enc_ld(dst, mem) );
+  ins_pipe(pipe_class_memory);
+%}
+
+// Load Long indexed
+instruct loadL_indexed(iRegLdst dst, indIndex mem) %{
+  match(Set dst (LoadL mem));
+  predicate(n->as_Load()->is_unordered() || followed_by_acquire(n));
+  ins_cost(MEMORY_REF_COST);
+
+  format %{ "LDX     $dst, $mem" %}
+  size(4);
+  ins_encode( enc_ldx(dst, mem) );
   ins_pipe(pipe_class_memory);
 %}
 
@@ -5794,6 +5995,18 @@ instruct loadP(iRegPdst dst, memoryAlg4 mem) %{
   ins_pipe(pipe_class_memory);
 %}
 
+// Load Pointer indexed
+instruct loadP_indexed(iRegPdst dst, indIndex mem) %{
+  match(Set dst (LoadP mem));
+  predicate(n->as_Load()->is_unordered() || followed_by_acquire(n));
+  ins_cost(MEMORY_REF_COST);
+
+  format %{ "LDX     $dst, $mem \t// ptr" %}
+  size(4);
+  ins_encode( enc_ldx(dst, mem) );
+  ins_pipe(pipe_class_memory);
+%}
+
 // Load Pointer acquire.
 instruct loadP_ac(iRegPdst dst, memoryAlg4 mem) %{
   match(Set dst (LoadP mem));
@@ -5857,6 +6070,21 @@ instruct loadF(regF dst, memory mem) %{
   ins_pipe(pipe_class_memory);
 %}
 
+// Load Float indexed
+instruct loadF_indexed(regF dst, indIndex mem) %{
+  match(Set dst (LoadF mem));
+  predicate(n->as_Load()->is_unordered() || followed_by_acquire(n));
+  ins_cost(MEMORY_REF_COST);
+
+  format %{ "LFSX    $dst, $mem" %}
+  size(4);
+  ins_encode %{
+    // TODO: PPC port $archOpcode(ppc64Opcode_lfsx);
+    __ lfsx($dst$$FloatRegister, $mem$$base$$Register, $mem$$index$$Register);
+  %}
+  ins_pipe(pipe_class_memory);
+%}
+
 // Load Float acquire.
 instruct loadF_ac(regF dst, memory mem, flagsRegCR0 cr0) %{
   match(Set dst (LoadF mem));
@@ -5891,6 +6119,18 @@ instruct loadD(regD dst, memory mem) %{
   format %{ "LFD     $dst, $mem" %}
   size(4);
   ins_encode( enc_lfd(dst, mem) );
+  ins_pipe(pipe_class_memory);
+%}
+
+// Load Double indexed
+instruct loadD_indexed(regD dst, indIndex mem) %{
+  match(Set dst (LoadD mem));
+  predicate(n->as_Load()->is_unordered() || followed_by_acquire(n));
+  ins_cost(MEMORY_REF_COST);
+
+  format %{ "LFDX    $dst, $mem" %}
+  size(4);
+  ins_encode( enc_lfdx(dst, mem) );
   ins_pipe(pipe_class_memory);
 %}
 
@@ -6688,6 +6928,20 @@ instruct storeB(memory mem, iRegIsrc src) %{
   ins_pipe(pipe_class_memory);
 %}
 
+// Store Byte indexed
+instruct storeB_indexed(indIndex mem, iRegIsrc src) %{
+  match(Set mem (StoreB mem src));
+  ins_cost(MEMORY_REF_COST);
+
+  format %{ "STBX    $src, $mem \t// byte" %}
+  size(4);
+  ins_encode %{
+    // TODO: PPC port $archOpcode(ppc64Opcode_stbx);
+    __ stbx($src$$Register, $mem$$base$$Register, $mem$$index$$Register);
+  %}
+  ins_pipe(pipe_class_memory);
+%}
+
 // Store Char/Short
 instruct storeC(memory mem, iRegIsrc src) %{
   match(Set mem (StoreC mem src));
@@ -6703,6 +6957,20 @@ instruct storeC(memory mem, iRegIsrc src) %{
   ins_pipe(pipe_class_memory);
 %}
 
+// Store Char/Short indexed
+instruct storeC_indexed(indIndex mem, iRegIsrc src) %{
+  match(Set mem (StoreC mem src));
+  ins_cost(MEMORY_REF_COST);
+
+  format %{ "STHX    $src, $mem \t// short" %}
+  size(4);
+  ins_encode %{
+    // TODO: PPC port $archOpcode(ppc64Opcode_sthx);
+    __ sthx($src$$Register, $mem$$base$$Register, $mem$$index$$Register);
+  %}
+  ins_pipe(pipe_class_memory);
+%}
+
 // Store Integer
 instruct storeI(memory mem, iRegIsrc src) %{
   match(Set mem (StoreI mem src));
@@ -6711,6 +6979,17 @@ instruct storeI(memory mem, iRegIsrc src) %{
   format %{ "STW     $src, $mem" %}
   size(4);
   ins_encode( enc_stw(src, mem) );
+  ins_pipe(pipe_class_memory);
+%}
+
+// Store Integer indexed
+instruct storeI_indexed(indIndex mem, iRegIsrc src) %{
+  match(Set mem (StoreI mem src));
+  ins_cost(MEMORY_REF_COST);
+
+  format %{ "STWX    $src, $mem" %}
+  size(4);
+  ins_encode( enc_stwx(src, mem) );
   ins_pipe(pipe_class_memory);
 %}
 
@@ -6733,6 +7012,17 @@ instruct storeL(memoryAlg4 mem, iRegLsrc src) %{
   format %{ "STD     $src, $mem \t// long" %}
   size(4);
   ins_encode( enc_std(src, mem) );
+  ins_pipe(pipe_class_memory);
+%}
+
+// Store Long indexed
+instruct storeL_indexed(indIndex mem, iRegLsrc src) %{
+  match(Set mem (StoreL mem src));
+  ins_cost(MEMORY_REF_COST);
+
+  format %{ "STDX    $src, $mem \t// long" %}
+  size(4);
+  ins_encode( enc_stdx(src, mem) );
   ins_pipe(pipe_class_memory);
 %}
 
@@ -6783,6 +7073,17 @@ instruct storeP(memoryAlg4 dst, iRegPsrc src) %{
   ins_pipe(pipe_class_memory);
 %}
 
+// Store Pointer indexed
+instruct storeP_indexed(indIndex dst, iRegPsrc src) %{
+  match(Set dst (StoreP dst src));
+  ins_cost(MEMORY_REF_COST);
+
+  format %{ "STDX    $src, $dst \t// ptr" %}
+  size(4);
+  ins_encode( enc_stdx(src, dst) );
+  ins_pipe(pipe_class_memory);
+%}
+
 // Store Float
 instruct storeF(memory mem, regF src) %{
   match(Set mem (StoreF mem src));
@@ -6794,6 +7095,17 @@ instruct storeF(memory mem, regF src) %{
   ins_pipe(pipe_class_memory);
 %}
 
+// Store Float indexed
+instruct storeF_indexed(indIndex mem, regF src) %{
+  match(Set mem (StoreF mem src));
+  ins_cost(MEMORY_REF_COST);
+
+  format %{ "STFSX   $src, $mem" %}
+  size(4);
+  ins_encode( enc_stfsx(src, mem) );
+  ins_pipe(pipe_class_memory);
+%}
+
 // Store Double
 instruct storeD(memory mem, regD src) %{
   match(Set mem (StoreD mem src));
@@ -6802,6 +7114,17 @@ instruct storeD(memory mem, regD src) %{
   format %{ "STFD    $src, $mem" %}
   size(4);
   ins_encode( enc_stfd(src, mem) );
+  ins_pipe(pipe_class_memory);
+%}
+
+// Store Double indexed
+instruct storeD_indexed(indIndex mem, regD src) %{
+  match(Set mem (StoreD mem src));
+  ins_cost(MEMORY_REF_COST);
+
+  format %{ "STFDX   $src, $mem" %}
+  size(4);
+  ins_encode( enc_stfdx(src, mem) );
   ins_pipe(pipe_class_memory);
 %}
 
